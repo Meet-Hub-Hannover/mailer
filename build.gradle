@@ -1,0 +1,16 @@
+apply plugin: 'java'
+apply plugin: 'eclipse'
+
+sourceCompatibility = 1.7
+
+tasks.withType(Compile) {
+    options.encoding = 'UTF-8'
+}
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compile 'org.mnode.ical4j:ical4j:1.0.6', 'com.ecwid:ecwid-mailchimp:2.0.1.0'
+    testCompile 'junit:junit:4.+'
+}
