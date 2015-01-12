@@ -1,7 +1,9 @@
 apply plugin: 'java'
 apply plugin: 'eclipse'
+apply plugin: 'application'
 
 sourceCompatibility = 1.7
+mainClassName = 'de.meethub.mailer.Mailer'
 
 tasks.withType(Compile) {
     options.encoding = 'UTF-8'
