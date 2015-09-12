@@ -5,7 +5,7 @@ apply plugin: 'application'
 sourceCompatibility = 1.7
 mainClassName = 'de.meethub.mailer.Mailer'
 
-tasks.withType(Compile) {
+tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
 }
 repositories {
