@@ -17,6 +17,7 @@
 
 package de.meethub.mailer;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
@@ -29,12 +30,9 @@ import java.util.GregorianCalendar;
 import java.util.List;
 import java.util.TimeZone;
 
-import net.fortuna.ical4j.data.CalendarBuilder;
-import net.fortuna.ical4j.data.ParserException;
-import net.fortuna.ical4j.model.Calendar;
-import net.fortuna.ical4j.model.DateTime;
-import net.fortuna.ical4j.model.Dur;
-import net.fortuna.ical4j.model.Period;
+import javax.xml.parsers.ParserConfigurationException;
+
+import org.xml.sax.SAXException;
 
 import com.ecwid.mailchimp.MailChimpClient;
 import com.ecwid.mailchimp.MailChimpException;
@@ -43,22 +41,31 @@ import com.ecwid.mailchimp.method.v1_3.campaign.CampaignCreateMethod;
 import com.ecwid.mailchimp.method.v1_3.campaign.CampaignSendTestMethod;
 import com.ecwid.mailchimp.method.v1_3.campaign.CampaignType;
 
+import net.fortuna.ical4j.data.CalendarBuilder;
+import net.fortuna.ical4j.data.ParserException;
+import net.fortuna.ical4j.model.Calendar;
+import net.fortuna.ical4j.model.DateTime;
+import net.fortuna.ical4j.model.Dur;
+import net.fortuna.ical4j.model.Period;
+import net.fortuna.ical4j.util.CompatibilityHints;
+
 public class Mailer {
 
     private static final String FROM_ADDRESS = "noreply@meet-hub-hannover.de";
     private static final String TEST_ADDRESS = "webmaster@meet-hub-hannover.de";
 
     public static void main(final String[] args) throws MalformedURLException {
-        System.out.println("command line: <apikey> <list-id> <calendar-url>\n");
+        System.out.println("command line: <apikey> <list-id> <calendar-url> <group-directory>\n");
 
         final String apiKey = args[0];
         final String listId = args[1];
         final URL calendarUrl = new URL(args[2]);
+        final File groupDirectory = new File(args[3]);
 
         final MailChimpClient mc = new MailChimpClient();
         try {
             System.out.println("Creating campaign...\n");
-            final String cid = mc.execute(createCampaign(apiKey, listId, calendarUrl));
+            final String cid = mc.execute(createCampaign(apiKey, listId, calendarUrl, groupDirectory));
             System.out.println("Campaign ID: " + cid);
 
             System.out.println("Test sending...");
@@ -77,7 +84,7 @@ public class Mailer {
             mc.execute(schedule);
 
             System.out.println("Finished.");
-        } catch (final IOException | MailChimpException | ParserException e) {
+        } catch (final IOException | MailChimpException | ParserException | ParserConfigurationException | SAXException e) {
             System.out.println("Fehler beim Senden");
             e.printStackTrace(System.out);
         } finally {
@@ -92,8 +99,9 @@ public class Mailer {
         return jsonFormat.format(inTwoHours);
     }
 
-    private static CampaignCreateMethod createCampaign(final String apikey, final String listId, final URL calendarUrl)
-        throws IOException, ParserException {
+    private static CampaignCreateMethod createCampaign(
+            final String apikey, final String listId, final URL calendarUrl, final File groupDirectory)
+        throws IOException, ParserException, ParserConfigurationException, SAXException {
 
         final CampaignCreateMethod create = new CampaignCreateMethod();
         create.apikey = apikey;
@@ -105,7 +113,7 @@ public class Mailer {
         options.put("from_name", "Meet-Hub-Hannover");
         create.options = options;
         final MailChimpObject content = new MailChimpObject();
-        content.put("text", createMailText(calendarUrl));
+        content.put("text", createMailText(calendarUrl, groupDirectory));
         create.content = content;
         return create;
     }
@@ -119,7 +127,8 @@ public class Mailer {
         return "Meet-Hub-Hannover Veranstaltungs-Newsletter KW " + kw + "/" + year;
     }
 
-    private static String createMailText(final URL calendarUrl) throws IOException, ParserException {
+    private static String createMailText(final URL calendarUrl, final File groupDirectory)
+        throws IOException, ParserException, ParserConfigurationException, SAXException {
         final Calendar mergedCalendar = loadCalendar(calendarUrl);
         final Period nextPeriod = new Period(new DateTime(), new Dur(1));
         return "== Meet-Hub-Hannover Veranstaltungs-Newsletter ==\n" +
@@ -130,6 +139,9 @@ public class Mailer {
                "Danach:\n" +
                formatLaterEvents(mergedCalendar, nextPeriod) +
                "\n" +
+               "Beteiligte Gruppen:\n" +
+               formatGroups(groupDirectory) +
+               "\n" +
                "==============================================\n" +
                "*|LIST:DESCRIPTION|*\n" +
                "\n" +
@@ -138,6 +150,8 @@ public class Mailer {
     }
 
     public static Calendar loadCalendar(final URL url) throws IOException, ParserException {
+        //noetig wegen ical4j-Bug #167
+        CompatibilityHints.setHintEnabled(CompatibilityHints.KEY_RELAXED_PARSING, true);
         final CalendarBuilder b = new CalendarBuilder();
         final URLConnection conn = url.openConnection();
         try (InputStream in = conn.getInputStream()) {
@@ -199,6 +213,25 @@ public class Mailer {
     private static String formatDate(final Date date) {
         final SimpleDateFormat df = new SimpleDateFormat("dd.MM.yyyy");
         return df.format(date);
+    }
+
+    private static String formatGroups(final File groupDirectory)
+        throws ParserConfigurationException, SAXException, IOException {
+
+        final StringBuilder b = new StringBuilder();
+        for (final Group group : Group.getGroups(groupDirectory)) {
+            b.append(" ");
+            b.append(group.getName());
+            b.append(" (");
+            b.append(group.getNick());
+            b.append("):");
+            b.append("\n");
+            b.append(" ");
+            b.append(group.getWebsite());
+            b.append("\n");
+            b.append("\n");
+        }
+        return b.toString();
     }
 
 }
